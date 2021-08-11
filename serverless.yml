@@ -9,4 +9,4 @@ provider:
 
 functions:
   hello:
-    handler: src/handler.js
+    handler: src/handler.hello
