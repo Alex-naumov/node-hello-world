@@ -2,11 +2,11 @@ service: node-hello-world
 
 provider:
   name: aws
-  runtime: nodejs12.x
+  runtime: nodejs14.x.x
   lambdaHashingVersion: 20201221
   stage: dev
   region: eu-central-1
 
 functions:
   hello:
-    handler: src/handler.hello
+    handler: src/handler.js
