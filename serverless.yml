@@ -1,12 +1,82 @@
 service: node-hello-world
 
+plugins:
+  - serverless-python-requirements
+  - serverless-step-functions
+  - serverless-pseudo-parameters
+
+custom:
+  pythonRequirements:
+    dockerizePip: non-linux
+  region: eu-west-1
+  stage: dev
+
+package:
+  exclude:
+    - node_modues/**
+    - venv/**
+
 provider:
   name: aws
   runtime: nodejs14.x
   lambdaHashingVersion: 20201221
   stage: dev
   region: eu-central-1
+  environment:
+    PUSH_FUNCTION: arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service}-${self:custom.stage}-push
 
 functions:
-  hello:
+  schedulerStart:
     handler: src/handler.hello
+    events:
+      - schedule: rate(1 minute)
+    environment:
+      STATEMACHINE_ARN: ${self:resources.Outputs.SchedulerStateMachine.Value}
+
+  scheduler:
+    handler: src/handler.hello
+
+  push:
+    handler: src/handler.hello
+
+stepFunctions:
+  stateMachines:
+    everySecond:
+      name: SchedulerStateMachine
+      definition:
+        Comment: "Step Function invoked every minute"
+        StartAt: ConfigureCount
+        States:
+          ConfigureCount:
+            Type: Pass
+            Result:
+              index: 0
+              count: 60
+            ResultPath: "$.iterator"
+            Next: "Iterator"
+          Iterator:
+            Type: Task
+            Resource: "arn:aws:lambda:#{AWS::Region}:#{AWS::AccountId}:function:${self:service}-${self:custom.stage}-scheduler"
+            ResultPath: "$.iterator"
+            Next: "IsCountReached"
+          IsCountReached:
+            Type: Choice
+            Choices:
+              - Variable: "$.iterator.continue"
+                BooleanEquals: true
+                Next: "Wait"
+            Default: "Done"
+          Wait:
+            Type: Wait
+            Seconds: 1
+            Next: "Iterator"
+          Done:
+            Type: Pass
+            End: true
+
+resources:
+  Outputs:
+    SchedulerStateMachine:
+      Description: The ARN of the state machine
+      Value:
+        Ref: SchedulerStateMachine
